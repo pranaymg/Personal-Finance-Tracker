@@ -1,1197 +1,657 @@
-// Active Navigation Highlighting
-document.addEventListener('DOMContentLoaded', function() {
-  // Get current page path
-  const currentPath = window.location.pathname;
-  const currentPage = currentPath.split('/').pop() || 'index.html';
-  
-  // Remove active class from all nav links
-  const navLinks = document.querySelectorAll('.nav-links a');
-  navLinks.forEach(link => link.classList.remove('active'));
-  
-  // Add active class based on current page
-  if (currentPage === 'index.html' || currentPage === '') {
-    // For index page, highlight Home
-    const homeLink = document.querySelector('.nav-links a[href="#"], .nav-links a[href="./index.html"]');
-    if (homeLink) homeLink.classList.add('active');
-  } else if (currentPage === 'support.html') {
-    // For support page, highlight Support
-    const supportLink = document.querySelector('.nav-links a[href="./support.html"]');
-    if (supportLink) supportLink.classList.add('active');
-  } else if (currentPage === 'login.html') {
-    // For login page, highlight Home (since it's part of main site)
-    const homeLink = document.querySelector('.nav-links a[href="./index.html"]');
-    if (homeLink) homeLink.classList.add('active');
-  } else if (currentPage === 'sign-up.html') {
-    // For sign-up page, highlight Home (since it's part of main site)
-    const homeLink = document.querySelector('.nav-links a[href="./index.html"]');
-    if (homeLink) homeLink.classList.add('active');
-  }
-  
-  // Initialize keyboard navigation
-  initKeyboardNavigation();
-  initKeyboardShortcuts();
-  
-  // Mobile Menu Toggle
-  const menuToggle = document.getElementById('menu-toggle');
-  const navLinksContainer = document.querySelector('.nav-links');
-  
-  if (menuToggle && navLinksContainer) {
-    menuToggle.addEventListener('click', function() {
-      navLinksContainer.classList.toggle('active');
-      const icon = menuToggle.querySelector('i');
-      if (navLinksContainer.classList.contains('active')) {
-        icon.classList.remove('fa-bars');
-        icon.classList.add('fa-times');
-      } else {
-        icon.classList.remove('fa-times');
-        icon.classList.add('fa-bars');
-      }
-    });
-    
-    // Close menu when clicking on a link
-    navLinks.forEach(link => {
-      link.addEventListener('click', function() {
-        navLinksContainer.classList.remove('active');
-        const icon = menuToggle.querySelector('i');
-        icon.classList.remove('fa-times');
-        icon.classList.add('fa-bars');
-      });
-    });
-    
-    // Close menu when clicking outside
-    document.addEventListener('click', function(event) {
-      if (!menuToggle.contains(event.target) && !navLinksContainer.contains(event.target)) {
-        navLinksContainer.classList.remove('active');
-        const icon = menuToggle.querySelector('i');
-        icon.classList.remove('fa-times');
-        icon.classList.add('fa-bars');
-      }
-    });
-  }
-});
+// Transactions array - per user
+const currentUser = Auth.getCurrentUser();
+let transactions = JSON.parse(localStorage.getItem('transactions_' + currentUser) || '[]');
 
-// const arrow = document.querySelector('.arrow');
-
-// arrow.addEventListener('click', (event) => {
-//   event.preventDefault();
-//   const targetElement = document.querySelector(event.target.getAttribute('#tracker'));
-//   targetElement.scrollIntoView({ behavior: 'smooth' });
-// });
-
-// Get the table-part element and the transaction-table
-const tablePart = document.querySelector(".table-part");
-const transactionTable = document.getElementById("transaction-table");
-
-// Function to check the number of entries and apply scrollbar if needed
-function checkTableScroll() {
-  const rowCount = transactionTable.rows.length - 1; // Exclude the header row
-  const maxRowCount = 10; // Set the desired maximum number of entries
-
-  if (rowCount > maxRowCount) {
-    tablePart.classList.add("scrollable");
-  } else {
-    tablePart.classList.remove("scrollable");
-  }
+// Save to localStorage - per user
+function saveTransactions() {
+  localStorage.setItem('transactions_' + currentUser, JSON.stringify(transactions));
 }
 
-// Call the function initially and whenever there is a change in the table
-checkTableScroll();
-
-// Add an event listener for changes in the table
-const observer = new MutationObserver(checkTableScroll);
-observer.observe(transactionTable, {
-  childList: true,
-  subtree: true,
-});
-
-// Initialize an empty array to store the transactions
-let transactions = [];
-
-// Variable to store the current transaction being edited
-let editedTransaction = null;
-
-// Function to add a new transaction
+// Add transaction
 function addTransaction() {
-  const descriptionInput = document.getElementById("description");
-  const amountInput = document.getElementById("amount");
-  const typeInput = document.getElementById("type");
-  const dateInput = document.getElementById("date");
+  const description = document.getElementById('description').value;
+  const amount = parseFloat(document.getElementById('amount').value);
+  const category = document.getElementById('category').value;
+  const type = document.getElementById('type').value;
+  const date = document.getElementById('date').value || new Date().toISOString().split('T')[0];
 
-  const description = descriptionInput.value;
-  const amount = parseFloat(amountInput.value);
-  const type = typeInput.value;
-  const chosenDate = new Date(dateInput.value);
-
-  // Clear the input fields
-  descriptionInput.value = "";
-  amountInput.value = "";
-  dateInput.value = "";
-
-  // Validate the input
-  if (description.trim() === "" || isNaN(amount) || isNaN(chosenDate)) {
+  if (!description || !amount) {
+    alert('Please enter description and amount');
     return;
   }
 
-  // Create a new transaction object
-  const transaction = {
-    primeId: chosenDate.getTime(),
-    description: description,
-    amount: amount,
-    type: type,
-  };
+  transactions.push({
+    id: Date.now(),
+    description,
+    amount,
+    category,
+    type,
+    date
+  });
 
-  // Add the transaction to the array
-  transactions.push(transaction);
-
-  // Update the balance
+  saveTransactions();
+  document.getElementById('description').value = '';
+  document.getElementById('amount').value = '';
+  document.getElementById('date').value = '';
   updateBalance();
-
-  // Update the transaction table
-  updateTransactionTable();
+  updateTable();
 }
 
-// Function to delete a transaction
-function deleteTransaction(primeId) {
-  // Find the index of the transaction with the given primeId
-  const index = transactions.findIndex(
-    (transaction) => transaction.primeId === primeId
-  );
-
-  // Remove the transaction from the array
-  if (index > -1) {
-    transactions.splice(index, 1);
-  }
-
-  // Update the balance
+// Delete transaction
+function deleteTransaction(id) {
+  transactions = transactions.filter(t => t.id !== id);
+  saveTransactions();
   updateBalance();
-
-  // Update the transaction table
-  updateTransactionTable();
+  updateTable();
 }
 
-// Function to edit a transaction
-function editTransaction(primeId) {
-  // Find the transaction with the given primeId
-  const transaction = transactions.find(
-    (transaction) => transaction.primeId === primeId
-  );
-
-  // Populate the input fields with the transaction details for editing
-  document.getElementById("description").value = transaction.description;
-  document.getElementById("amount").value = transaction.amount;
-  document.getElementById("type").value = transaction.type;
-
-  // Store the current transaction being edited
-  editedTransaction = transaction;
-
-  // Show the Save button and hide the Add Transaction button
-  document.getElementById("add-transaction-btn").style.display = "none";
-  document.getElementById("save-transaction-btn").style.display =
-    "inline-block";
-
-  // Set the date input value to the chosen date
-  const dateInput = document.getElementById("date");
-  const chosenDate = new Date(transaction.primeId);
-  const formattedDate = formatDate(chosenDate);
-  dateInput.value = formattedDate;
-}
-
-// Function to save the edited transaction
-function saveTransaction() {
-  if (!editedTransaction) {
-    return;
-  }
-  const descriptionInput = document.getElementById("description");
-  const amountInput = document.getElementById("amount");
-  const typeInput = document.getElementById("type");
-  const dateInput = document.getElementById("date");
-
-  const description = descriptionInput.value;
-  const amount = parseFloat(amountInput.value);
-  const type = typeInput.value;
-  const chosenDate = new Date(dateInput.value);
-
-  // Validate the input
-  if (description.trim() === "" || isNaN(amount) || isNaN(chosenDate)) {
-    return;
-  }
-
-  // Update the transaction details
-  editedTransaction.description = description;
-  editedTransaction.amount = amount;
-  editedTransaction.type = type;
-  editedTransaction.primeId = chosenDate.getTime();
-
-  // Clear the input fields
-  descriptionInput.value = "";
-  amountInput.value = "";
-  dateInput.value = "";
-
-  // Clear the edited transaction
-  editedTransaction = null;
-
-  // Update the balance
-  updateBalance();
-
-  // Update the transaction table
-  updateTransactionTable();
-
-  // Show the Add Transaction button and hide the Save button
-  document.getElementById("add-transaction-btn").style.display = "inline-block";
-  document.getElementById("save-transaction-btn").style.display = "none";
-}
-
-// Function to update the balance
+// Update balance
 function updateBalance() {
-  const balanceElement = document.getElementById("balance");
-  let balance = 0.0;
+  const balance = transactions.reduce((sum, t) => {
+    return t.type === 'income' ? sum + t.amount : sum - t.amount;
+  }, 0);
 
-  // Calculate the total balance
-  transactions.forEach((transaction) => {
-    if (transaction.type === "income") {
-      balance += transaction.amount;
-    } else if (transaction.type === "expense") {
-      balance -= transaction.amount;
-    }
+  const currency = document.getElementById('currency').value;
+  const symbols = { USD: '$', EUR: '€', INR: '₹' };
+  document.getElementById('balance').textContent = symbols[currency] + balance.toFixed(2);
+  
+  updateStats();
+}
+
+// Update stats cards
+function updateStats() {
+  const currency = document.getElementById('currency').value;
+  const symbols = { USD: '$', EUR: '€', INR: '₹' };
+  
+  const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+  
+  const now = new Date();
+  const monthExpense = transactions.filter(t => {
+    const tDate = new Date(t.date);
+    return t.type === 'expense' && tDate.getMonth() === now.getMonth() && tDate.getFullYear() === now.getFullYear();
+  }).reduce((sum, t) => sum + t.amount, 0);
+  
+  document.getElementById('total-income').textContent = symbols[currency] + totalIncome.toFixed(2);
+  document.getElementById('total-expense').textContent = symbols[currency] + totalExpense.toFixed(2);
+  document.getElementById('month-expense').textContent = symbols[currency] + monthExpense.toFixed(2);
+  document.getElementById('total-transactions').textContent = transactions.length;
+}
+
+// Update table
+function updateTable() {
+  const table = document.getElementById('transaction-table');
+  while (table.rows.length > 1) table.deleteRow(1);
+
+  transactions.forEach(t => {
+    const row = table.insertRow();
+    row.className = t.type === 'income' ? 'income-row' : 'expense-row';
+    row.innerHTML = `
+      <td>${t.date}</td>
+      <td>${t.description}</td>
+      <td style="color: ${t.type === 'income' ? '#00ff88' : '#ff2e97'}; font-weight: 700;">${t.type === 'income' ? '+' : '-'}${t.amount}</td>
+      <td>${t.category}</td>
+      <td><span style="padding: 5px 10px; border-radius: 10px; background: ${t.type === 'income' ? 'rgba(0,255,136,0.2)' : 'rgba(255,46,151,0.2)'}; color: ${t.type === 'income' ? '#00ff88' : '#ff2e97'}; font-size: 0.85rem; font-weight: 600;">${t.type}</span></td>
+      <td>
+        <button class="delete-button" onclick="deleteTransaction(${t.id})">Delete</button>
+      </td>
+    `;
+  });
+}
+
+// Category analysis
+function showCategoryAnalysis() {
+  const expenses = transactions.filter(t => t.type === 'expense');
+  const totals = {};
+  let total = 0;
+  
+  expenses.forEach(t => {
+    totals[t.category] = (totals[t.category] || 0) + t.amount;
+    total += t.amount;
   });
 
-  // Format the balance with currency symbol
-  const currencySelect = document.getElementById("currency");
-  const currencyCode = currencySelect.value;
-  const formattedBalance = formatCurrency(balance, currencyCode);
-
-  // Update the balance display
-  balanceElement.textContent = formattedBalance;
-
-  // Check if the balance is negative or positive
-  if (balance < 0) {
-    balanceElement.classList.remove("positive-balance");
-    balanceElement.classList.add("negative-balance");
+  const currency = document.getElementById('currency').value;
+  const symbols = { USD: '$', EUR: '€', INR: '₹' };
+  
+  let html = '<h2 style="text-align:center;margin-bottom:30px"><i class="fas fa-chart-pie"></i> Expense Categories</h2>';
+  
+  if (Object.keys(totals).length === 0) {
+    html += '<p style="text-align:center;opacity:0.7">No expenses recorded yet.</p>';
   } else {
-    balanceElement.classList.remove("negative-balance");
-    balanceElement.classList.add("positive-balance");
+    html += '<div style="display:grid;gap:20px">';
+    Object.entries(totals).sort((a,b) => b[1] - a[1]).forEach(([cat, amt]) => {
+      const percent = ((amt/total)*100).toFixed(1);
+      html += `
+        <div style="padding:20px;background:rgba(255,255,255,0.05);border-radius:15px;border:1px solid rgba(255,255,255,0.1)">
+          <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+            <strong style="font-size:16px">${cat}</strong>
+            <span style="color:#43e97b;font-weight:bold;font-size:16px">${symbols[currency]}${amt.toFixed(2)}</span>
+          </div>
+          <div style="background:rgba(255,255,255,0.1);border-radius:10px;height:12px;overflow:hidden;margin-bottom:8px">
+            <div style="background:linear-gradient(135deg,#43e97b 0%,#38f9d7 100%);height:100%;width:${percent}%;transition:width 0.5s ease"></div>
+          </div>
+          <div style="text-align:right;font-size:14px;color:rgba(255,255,255,0.7);font-weight:600">${percent}%</div>
+        </div>
+      `;
+    });
+    html += '</div>';
   }
+  
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px';
+  modal.onclick = () => modal.remove();
+  
+  const card = document.createElement('div');
+  card.style.cssText = 'background:rgba(0,0,0,0.4);backdrop-filter:blur(40px) saturate(200%) brightness(110%);padding:40px;border-radius:30px;max-width:600px;width:100%;max-height:80vh;overflow-y:auto;border:1px solid rgba(255,255,255,0.1);box-shadow:0 8px 32px rgba(0,0,0,0.3);color:#fff';
+  card.onclick = (e) => e.stopPropagation();
+  
+  card.innerHTML = html + '<button onclick="this.closest(\'div\').parentElement.remove()" style="padding:15px;border:none;background:linear-gradient(135deg,#43e97b 0%,#38f9d7 100%);color:#1a1a2e;border-radius:15px;cursor:pointer;width:100%;font-weight:700;font-size:16px;margin-top:20px">Close</button>';
+  
+  modal.appendChild(card);
+  document.body.appendChild(modal);
 }
 
-window.addEventListener("DOMContentLoaded", () => {
-  // Set initial balance value
-  let balance = 0.0;
-  updateBalance(balance); // Update the balance display
-
-  // Other code for adding transactions, updating balance, etc.
-
-  // Function to update the balance display
-  function updateBalance(balance) {
-    const balanceElement = document.getElementById("balance");
-    balanceElement.textContent = balance.toFixed(2); // Format balance with 2 decimal places
-  }
-});
-// Function to format currency based on the selected currency code
-function formatCurrency(amount, currencyCode) {
-  // Define currency symbols and decimal separators for different currency codes
-  const currencySymbols = {
-    USD: "$",
-    EUR: "€",
-    INR: "₹",
-  };
-
-  const decimalSeparators = {
-    USD: ".",
-    EUR: ",",
-    INR: ".",
-  };
-
-  // Get the currency symbol and decimal separator based on the currency code
-  const symbol = currencySymbols[currencyCode] || "";
-  const decimalSeparator = decimalSeparators[currencyCode] || ".";
-
-  // Format the amount with currency symbol and decimal separator
-  const formattedAmount =
-    symbol + amount.toFixed(2).replace(".", decimalSeparator);
-  return formattedAmount;
-}
-
-// Function to format date as DD/MM/YYYY
-function formatDate(date) {
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const year = date.getFullYear();
-  return `${day}/${month}/${year}`;
-}
-
-// Function to update the transaction table
-function updateTransactionTable() {
-  const transactionTable = document.getElementById("transaction-table");
-
-  // Clear the existing table rows
-  while (transactionTable.rows.length > 1) {
-    transactionTable.deleteRow(1);
-  }
-
-  // Add new rows to the table
-  transactions.forEach((transaction) => {
-    const newRow = transactionTable.insertRow();
-
-    const dateCell = newRow.insertCell();
-    const date = new Date(transaction.primeId);
-    dateCell.textContent = formatDate(date);
-
-    const descriptionCell = newRow.insertCell();
-    descriptionCell.textContent = transaction.description;
-
-    const amountCell = newRow.insertCell();
-    const currencySelect = document.getElementById("currency");
-    const currencyCode = currencySelect.value;
-    const formattedAmount = formatCurrency(transaction.amount, currencyCode);
-    amountCell.textContent = formattedAmount;
-
-    const typeCell = newRow.insertCell();
-    typeCell.textContent = transaction.type;
-
-    const actionCell = newRow.insertCell();
-    const editButton = document.createElement("button");
-    editButton.textContent = "Edit";
-    editButton.classList.add("edit-button");
-    editButton.addEventListener("click", () =>
-      editTransaction(transaction.primeId)
-    );
-    actionCell.appendChild(editButton);
-
-    const deleteButton = document.createElement("button");
-    deleteButton.textContent = "Delete";
-    deleteButton.classList.add("delete-button");
-    deleteButton.addEventListener("click", () =>
-      deleteTransaction(transaction.primeId)
-    );
-    actionCell.appendChild(deleteButton);
-
-    const saveButton = document.createElement("button");
-    saveButton.textContent = "Save";
-    saveButton.classList.add("save-button");
-    saveButton.addEventListener("click", () =>
-      saveTransaction(transaction.primeId)
-    );
-    actionCell.appendChild(saveButton);
-  });
-}
-
-// Event listener for the Add Transaction button
-document
-  .getElementById("add-transaction-btn")
-  .addEventListener("click", addTransaction);
-
-// Event listener for the Save Transaction button
-document
-  .getElementById("save-transaction-btn")
-  .addEventListener("click", saveTransaction);
-
-// Initial update of the balance and transaction table
-updateBalance();
-updateTransactionTable();
-
-// Function to handle the download of data in PDF and CSV formats
+// Export
 function handleDownload() {
-  // Prompt the user to select the export format
-  const exportFormat = prompt("Select export format: PDF or CSV").toLowerCase();
-
-  if (exportFormat === "pdf") {
-    // Call a function to export data to PDF
-    exportToPDF();
-  } else if (exportFormat === "csv") {
-    // Call a function to export data to CSV
-    exportToCSV();
-  } else {
-    showNotification('Invalid export format. Please enter either "PDF" or "CSV".', 'error');
-  }
+  const csv = 'Date,Description,Amount,Category,Type\n' + 
+    transactions.map(t => `${t.date},${t.description},${t.amount},${t.category},${t.type}`).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'transactions.csv';
+  a.click();
 }
 
-// Function to export data to PDF
-function exportToPDF() {
-  // Define the document content using pdfMake syntax
-  const docDefinition = {
-    content: [
-      {
-        table: {
-          headerRows: 1,
-          widths: ["auto", "*", "auto", "auto"],
-          body: [
-            [
-              { text: "Date", style: "header" },
-              { text: "Description", style: "header" },
-              { text: "Amount", style: "header" },
-              { text: "Type", style: "header" },
-            ],
-            // Add transaction data to the table body
-            ...transactions.map((transaction) => {
-              const date = formatDate(new Date(transaction.primeId));
-              const description = transaction.description;
-              const amount = transaction.amount;
-              const type = transaction.type;
+// SMS Reader stub
+const SMSReader = {
+  showSMSInput: () => alert('SMS import feature coming soon!')
+};
 
-              return [date, description, amount.toString(), type];
-            }),
-          ],
-        },
-      },
-    ],
-    styles: {
-      header: {
-        fontSize: 12,
-        bold: true,
-        margin: [0, 5],
-      },
-    },
-  };
-
-  // Create the PDF document
-  pdfMake.createPdf(docDefinition).download("transactions.pdf");
-}
-
-// Function to export data to CSV
-function exportToCSV() {
-  // Generate CSV content
-  const csvContent =
-    "Date,Description,Amount,Type\n" +
-    transactions
-      .map((transaction) => {
-        const date = formatDate(new Date(transaction.primeId));
-        const description = transaction.description;
-        const amount = transaction.amount;
-        const type = transaction.type;
-
-        return `${date},${description},${amount},${type}`;
-      })
-      .join("\n");
-  // Create a Blob with the CSV content
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-
-  // Create a link element and trigger a click to download the CSV file
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "transactions.csv";
-  link.click();
-}
-
-// Invite Section Functions
+// Email invite
 function sendEmailInvite() {
-  const emailInput = document.getElementById('invite-email');
-  const email = emailInput.value.trim();
-  
-  if (!email) {
-    showNotification('Please enter an email address', 'error');
-    return;
+  const email = document.getElementById('invite-email').value;
+  if (email) {
+    window.location.href = `mailto:${email}?subject=Join Finance Tracker`;
   }
-  
-  if (!isValidEmail(email)) {
-    showNotification('Please enter a valid email address', 'error');
-    return;
-  }
-  
-  // Create mailto link with pre-filled subject and body
-  const subject = 'Join our Personal Finance Tracker community!';
-  const body = `Hi! I've been using this amazing Personal Finance Tracker app to manage my finances and I thought you might find it useful too. It helps you track income, expenses, and manage your budget effectively. Check it out: ${window.location.href}`;
-  
-  const mailtoLink = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  
-  // Open the default email client
-  window.location.href = mailtoLink;
-  
-  // Clear the input
-  emailInput.value = '';
-  
-  // Show success message
-  showNotification('Community invite sent!', 'success');
 }
 
 function shareOnLinkedIn() {
-  const url = encodeURIComponent(window.location.href);
-  const text = encodeURIComponent('Join our Personal Finance Tracker community! Track your finances effortlessly.');
-  const linkedinUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${url}`;
-  
-  // Open LinkedIn share dialog in a new window
-  window.open(linkedinUrl, 'linkedin-share', 'width=600,height=400,scrollbars=yes,resizable=yes');
-  
-  showNotification('LinkedIn share opened!', 'success');
+  window.open('https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(window.location.href));
 }
 
 function shareOnTwitter() {
-  const url = encodeURIComponent(window.location.href);
-  const text = encodeURIComponent('Join our Personal Finance Tracker community! Track your finances effortlessly.');
-  const twitterUrl = `https://twitter.com/intent/tweet?url=${url}&text=${text}`;
-  
-  // Open Twitter share dialog in a new window
-  window.open(twitterUrl, 'twitter-share', 'width=600,height=400,scrollbars=yes,resizable=yes');
-  
-  showNotification('Community share opened!', 'success');
+  window.open('https://twitter.com/intent/tweet?url=' + encodeURIComponent(window.location.href));
 }
 
-function isValidEmail(email) {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+  if (currentUser) {
+    document.getElementById('user-name').textContent = currentUser;
+  }
+  // Set today's date as default
+  document.getElementById('date').valueAsDate = new Date();
+  updateBalance();
+  updateTable();
+});
+
+// Logout
+function logout() {
+  Auth.logout();
+  window.location.href = './login.html';
 }
 
-function showNotification(message, type = 'info') {
-  // Create notification element
-  const notification = document.createElement('div');
-  notification.className = `notification notification-${type}`;
-  notification.textContent = message;
+// Charts
+let pieChart, lineChart;
+
+function showCharts() {
+  const section = document.getElementById('charts-section');
+  section.style.display = section.style.display === 'none' ? 'block' : 'none';
   
-  // Style the notification
-  notification.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: ${type === 'success' ? '#28a745' : '#17a2b8'};
-    color: white;
-    padding: 12px 20px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    z-index: 10000;
-    font-weight: 500;
-    animation: slideIn 0.3s ease-out;
-  `;
+  if (section.style.display === 'block') {
+    renderPieChart();
+    renderLineChart();
+  }
+}
+
+function renderPieChart() {
+  const expenses = transactions.filter(t => t.type === 'expense');
+  const totals = {};
   
-  // Add animation keyframes
-  if (!document.getElementById('notification-styles')) {
-    const style = document.createElement('style');
-    style.id = 'notification-styles';
-    style.textContent = `
-      @keyframes slideIn {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
+  expenses.forEach(t => {
+    totals[t.category] = (totals[t.category] || 0) + t.amount;
+  });
+  
+  const ctx = document.getElementById('pieChart');
+  if (pieChart) pieChart.destroy();
+  
+  pieChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(totals),
+      datasets: [{
+        data: Object.values(totals),
+        backgroundColor: [
+          '#00ff88', '#00d4ff', '#b537f2', '#ff2e97',
+          '#ffd700', '#ff6b6b', '#667eea', '#38f9d7'
+        ],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: '#fff', padding: 15, font: { size: 12 } }
+        }
       }
-      @keyframes slideOut {
-        from { transform: translateX(0); opacity: 1; }
-        to { transform: translateX(100%); opacity: 0; }
-      }
-    `;
-    document.head.appendChild(style);
+    }
+  });
+}
+
+function renderLineChart() {
+  const last7Days = [];
+  const incomeData = [];
+  const expenseData = [];
+  
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    const dateStr = date.toISOString().split('T')[0];
+    last7Days.push(dateStr);
+    
+    const dayIncome = transactions.filter(t => t.type === 'income' && t.date === dateStr).reduce((sum, t) => sum + t.amount, 0);
+    const dayExpense = transactions.filter(t => t.type === 'expense' && t.date === dateStr).reduce((sum, t) => sum + t.amount, 0);
+    
+    incomeData.push(dayIncome);
+    expenseData.push(dayExpense);
   }
   
-  // Add to page
-  document.body.appendChild(notification);
+  const ctx = document.getElementById('lineChart');
+  if (lineChart) lineChart.destroy();
   
-  // Remove after 3 seconds
-  setTimeout(() => {
-    notification.style.animation = 'slideOut 0.3s ease-in';
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
+  lineChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: last7Days.map(d => new Date(d).toLocaleDateString('en', { month: 'short', day: 'numeric' })),
+      datasets: [
+        {
+          label: 'Income',
+          data: incomeData,
+          borderColor: '#00ff88',
+          backgroundColor: 'rgba(0, 255, 136, 0.1)',
+          tension: 0.4,
+          fill: true
+        },
+        {
+          label: 'Expenses',
+          data: expenseData,
+          borderColor: '#ff2e97',
+          backgroundColor: 'rgba(255, 46, 151, 0.1)',
+          tension: 0.4,
+          fill: true
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: {
+          labels: { color: '#fff', padding: 15, font: { size: 12 } }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { color: '#fff' },
+          grid: { color: 'rgba(255, 255, 255, 0.1)' }
+        },
+        x: {
+          ticks: { color: '#fff' },
+          grid: { color: 'rgba(255, 255, 255, 0.1)' }
+        }
       }
-    }, 300);
+    }
+  });
+}
+
+// Particle Background
+const canvas = document.getElementById('particles');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const particles = [];
+for (let i = 0; i < 100; i++) {
+  particles.push({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    radius: Math.random() * 2 + 1,
+    vx: (Math.random() - 0.5) * 0.5,
+    vy: (Math.random() - 0.5) * 0.5
+  });
+}
+
+function animateParticles() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(0, 212, 255, 0.5)';
+  
+  particles.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    
+    if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+    if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+    
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  
+  requestAnimationFrame(animateParticles);
+}
+
+animateParticles();
+
+window.addEventListener('resize', () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+
+// Toast Notifications
+function showToast(message, type = 'success') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  
+  const icons = {
+    success: 'fa-check-circle',
+    error: 'fa-exclamation-circle',
+    info: 'fa-info-circle'
+  };
+  
+  toast.innerHTML = `
+    <i class="fas ${icons[type]}"></i>
+    <span>${message}</span>
+  `;
+  
+  container.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.animation = 'slideOut 0.3s ease-out';
+    setTimeout(() => toast.remove(), 300);
   }, 3000);
 }
 
-// Add event listener for Enter key on email input
-document.addEventListener('DOMContentLoaded', function() {
-  const emailInput = document.getElementById('invite-email');
-  if (emailInput) {
-    emailInput.addEventListener('keypress', function(e) {
-      if (e.key === 'Enter') {
-        sendEmailInvite();
-      }
-    });
+// Confetti Effect
+function createConfetti() {
+  for (let i = 0; i < 50; i++) {
+    const confetti = document.createElement('div');
+    confetti.className = 'confetti';
+    confetti.style.left = Math.random() * window.innerWidth + 'px';
+    confetti.style.top = '-10px';
+    confetti.style.background = ['#00ff88', '#00d4ff', '#b537f2', '#ff2e97'][Math.floor(Math.random() * 4)];
+    confetti.style.animationDelay = Math.random() * 0.5 + 's';
+    document.body.appendChild(confetti);
+    
+    setTimeout(() => confetti.remove(), 3000);
   }
-});
+}
 
-// Search Bar Functionality
-document.addEventListener('DOMContentLoaded', function() {
-  const searchInput = document.getElementById('search-input');
-  
-  if (searchInput) {
-    // Focus search bar on Cmd+K, Ctrl+K, or Ctrl+Shift+K
-    document.addEventListener('keydown', function(e) {
-      // Check for Cmd+K (Mac), Ctrl+K, or Ctrl+Shift+K (Windows/Linux)
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k' && !e.shiftKey) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        
-        // Focus the search input
-        searchInput.focus();
-        searchInput.select(); // Select all text for easy replacement
-        
-        // Show a brief visual feedback
-        searchInput.style.borderColor = '#0b0081';
-        setTimeout(() => {
-          searchInput.style.borderColor = '';
-        }, 1000);
-        
-        return false;
-      }
-      
-      // Alternative: Ctrl+Shift+K (won't conflict with browser)
-      if (e.ctrlKey && e.shiftKey && e.key === 'K') {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        
-        // Focus the search input
-        searchInput.focus();
-        searchInput.select();
-        
-        // Show a brief visual feedback
-        searchInput.style.borderColor = '#0b0081';
-        setTimeout(() => {
-          searchInput.style.borderColor = '';
-        }, 1000);
-        
-        return false;
-      }
-    }, true); // Use capture phase to intercept before browser default
-    
-    // Handle search functionality
-    searchInput.addEventListener('input', function(e) {
-      const query = e.target.value.toLowerCase().trim();
-      
-      if (query.length > 2) { // Only search if at least 3 characters
-        performSearch(query);
-      } else if (query.length === 0) {
-        // Clear highlights when search is empty
-        const previousHighlights = document.querySelectorAll('.search-highlight');
-        previousHighlights.forEach(el => {
-          el.classList.remove('search-highlight');
-        });
-      }
-    });
-    
-    // Handle Enter key in search
-    searchInput.addEventListener('keypress', function(e) {
-      if (e.key === 'Enter') {
-        const query = e.target.value.toLowerCase().trim();
-        if (query.length > 0) {
-          performSearch(query);
-        }
-      }
-    });
-  }
-});
+// Quick Add Transaction (FAB)
+function quickAddTransaction() {
+  document.getElementById('description').focus();
+  document.getElementById('tracker').scrollIntoView({ behavior: 'smooth' });
+}
 
-// Search functionality
-function performSearch(query) {
+// Update addTransaction to include toast and confetti
+const originalAddTransaction = addTransaction;
+addTransaction = function() {
+  const oldBalance = transactions.reduce((sum, t) => {
+    return t.type === 'income' ? sum + t.amount : sum - t.amount;
+  }, 0);
   
-  // Clear previous highlights
-  const previousHighlights = document.querySelectorAll('.search-highlight');
-  previousHighlights.forEach(el => {
-    el.classList.remove('search-highlight');
-  });
+  originalAddTransaction();
   
-  // Get all text elements that can be searched
-  const searchableElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span, div, a, li, td, th, button, input[placeholder]');
-  let foundResults = false;
-  let resultCount = 0;
-  let firstResult = null;
-  const searchResults = [];
+  const newBalance = transactions.reduce((sum, t) => {
+    return t.type === 'income' ? sum + t.amount : sum - t.amount;
+  }, 0);
   
-  searchableElements.forEach(element => {
-    const text = element.textContent.toLowerCase();
-    const placeholder = element.placeholder ? element.placeholder.toLowerCase() : '';
-    
-    if (text.includes(query) || placeholder.includes(query)) {
-      // Highlight the element
-      element.classList.add('search-highlight');
-      foundResults = true;
-      resultCount++;
-      
-      // Store result info for enhanced display
-      searchResults.push({
-        element: element,
-        text: element.textContent.trim(),
-        tagName: element.tagName.toLowerCase(),
-        type: element.placeholder ? 'input' : element.tagName.toLowerCase()
-      });
-      
-      // Store the first result for scrolling
-      if (!firstResult) {
-        firstResult = element;
-      }
-    }
-  });
-  
-  if (foundResults) {
-    showEnhancedSearchNotification(searchResults, query, 'success');
-    
-    // Scroll to first result with enhanced animation
-    if (firstResult) {
-      setTimeout(() => {
-        firstResult.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'center',
-          inline: 'nearest'
-        });
-        // Add focus effect
-        firstResult.classList.add('search-focus');
-        setTimeout(() => firstResult.classList.remove('search-focus'), 2000);
-      }, 300);
-    }
+  if (newBalance > oldBalance) {
+    createConfetti();
+    showToast('Transaction added! Balance increased! 🎉', 'success');
   } else {
-    showEnhancedSearchNotification([], query, 'error');
+    showToast('Transaction added successfully!', 'success');
+  }
+};
+
+// Update deleteTransaction to include toast
+const originalDeleteTransaction = deleteTransaction;
+deleteTransaction = function(id) {
+  originalDeleteTransaction(id);
+  showToast('Transaction deleted', 'info');
+};
+
+// AI Insights
+function showAIInsights() {
+  const section = document.getElementById('ai-insights-section');
+  section.style.display = section.style.display === 'none' ? 'block' : 'none';
+  
+  if (section.style.display === 'block') {
+    generateAIInsights();
   }
 }
 
-// Enhanced search notification function
-function showEnhancedSearchNotification(results, query, type) {
-  // Remove existing notification
-  const existingNotification = document.getElementById('search-notification');
-  if (existingNotification) {
-    existingNotification.remove();
-  }
+function generateAIInsights() {
+  const currency = document.getElementById('currency').value;
+  const symbols = { USD: '$', EUR: '€', INR: '₹' };
   
-  const notification = document.createElement('div');
-  notification.id = 'search-notification';
-  notification.style.cssText = `
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    background: ${type === 'success' ? 'linear-gradient(135deg, #0b0081 0%, #1a1a8a 100%)' : 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)'};
-    color: white;
-    padding: 20px;
-    border-radius: 12px;
-    font-size: 14px;
-    z-index: 1000;
-    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-    max-width: 350px;
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.1);
-    animation: slideInRight 0.3s ease-out;
-  `;
+  // Calculate metrics
+  const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+  const avgExpense = totalExpense / (transactions.filter(t => t.type === 'expense').length || 1);
   
-  if (type === 'success' && results.length > 0) {
-    notification.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-        <i class="fas fa-search" style="color: #f4ff61; font-size: 16px;"></i>
-        <strong>${results.length} result${results.length > 1 ? 's' : ''} found</strong>
-      </div>
-      <div style="max-height: 200px; overflow-y: auto;">
-        ${results.slice(0, 5).map(result => `
-          <div style="padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
-            <div style="color: #f4ff61; font-weight: bold; text-transform: uppercase; font-size: 11px; margin-bottom: 4px;">
-              ${result.type === 'input' ? 'INPUT FIELD' : result.tagName}
-            </div>
-            <div style="font-size: 13px; opacity: 0.9; line-height: 1.4;">
-              ${result.text.substring(0, 80)}${result.text.length > 80 ? '...' : ''}
-            </div>
-          </div>
-        `).join('')}
-        ${results.length > 5 ? `
-          <div style="text-align: center; margin-top: 10px; font-size: 12px; opacity: 0.7;">
-            +${results.length - 5} more results
-          </div>
-        ` : ''}
-      </div>
-    `;
+  // Category analysis
+  const categoryTotals = {};
+  transactions.filter(t => t.type === 'expense').forEach(t => {
+    categoryTotals[t.category] = (categoryTotals[t.category] || 0) + t.amount;
+  });
+  const topCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0];
+  
+  // Trend analysis
+  const last7Days = transactions.filter(t => {
+    const date = new Date(t.date);
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    return date >= weekAgo && t.type === 'expense';
+  }).reduce((sum, t) => sum + t.amount, 0);
+  
+  // Day analysis
+  const daySpending = {};
+  transactions.filter(t => t.type === 'expense').forEach(t => {
+    const day = new Date(t.date).toLocaleDateString('en', { weekday: 'long' });
+    daySpending[day] = (daySpending[day] || 0) + t.amount;
+  });
+  const bestDay = Object.entries(daySpending).sort((a, b) => a[1] - b[1])[0];
+  
+  // Financial Score (0-100)
+  const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome) * 100 : 0;
+  const score = Math.max(0, Math.min(100, Math.round(savingsRate)));
+  
+  // Generate insights
+  document.getElementById('ai-recommendation').textContent = 
+    topCategory ? `You're spending most on ${topCategory[0]} (${symbols[currency]}${topCategory[1].toFixed(2)}). Consider setting a budget limit for this category.` 
+    : 'Start tracking expenses to get personalized recommendations!';
+  
+  document.getElementById('ai-trend').textContent = 
+    last7Days > 0 ? `Your spending in the last 7 days: ${symbols[currency]}${last7Days.toFixed(2)}. ${last7Days > avgExpense * 7 ? '⚠️ Higher than usual!' : '✅ Looking good!'}` 
+    : 'No recent transactions to analyze.';
+  
+  document.getElementById('ai-alert').textContent = 
+    totalExpense > totalIncome ? `⚠️ You've spent ${symbols[currency]}${(totalExpense - totalIncome).toFixed(2)} more than earned. Time to cut back!` 
+    : `✅ Great! You're ${symbols[currency]}${(totalIncome - totalExpense).toFixed(2)} ahead.`;
+  
+  document.getElementById('ai-score').textContent = 
+    `Your financial health score: ${score}/100. ${score >= 70 ? '🏆 Excellent!' : score >= 40 ? '📈 Good, keep improving!' : '⚠️ Needs attention!'}`;
+  
+  document.getElementById('ai-savings').textContent = 
+    totalIncome > 0 ? `You could save ${symbols[currency]}${(totalExpense * 0.2).toFixed(2)} by reducing expenses by 20%. Small changes make big differences!` 
+    : 'Add income transactions to see savings potential.';
+  
+  document.getElementById('ai-bestday').textContent = 
+    bestDay ? `${bestDay[0]} is your lowest spending day (${symbols[currency]}${bestDay[1].toFixed(2)}). Try shopping on this day!` 
+    : 'Track more transactions to find your best spending day.';
+}
+
+// Voice Command System
+let recognition;
+let isListening = false;
+
+function initVoiceRecognition() {
+  if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+    
+    recognition.onstart = () => {
+      isListening = true;
+      document.querySelector('.voice-btn').classList.add('listening');
+      document.getElementById('voice-status').textContent = 'Listening... Speak now!';
+      document.getElementById('voice-animation').style.display = 'flex';
+    };
+    
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript.toLowerCase();
+      document.getElementById('voice-transcript').textContent = `"${transcript}"`;
+      processVoiceCommand(transcript);
+    };
+    
+    recognition.onerror = (event) => {
+      showToast('Voice recognition error: ' + event.error, 'error');
+      stopListening();
+    };
+    
+    recognition.onend = () => {
+      stopListening();
+    };
   } else {
-    notification.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 10px;">
-        <i class="fas fa-exclamation-triangle" style="color: #ffc107; font-size: 16px;"></i>
-        <div>
-          <strong>No results found</strong>
-          <div style="font-size: 12px; margin-top: 4px; opacity: 0.8;">
-            Try different keywords or check spelling
-          </div>
-        </div>
-      </div>
-    `;
-  }
-  
-  document.body.appendChild(notification);
-  
-  // Auto-hide after 5 seconds
-  setTimeout(() => {
-    if (notification.parentNode) {
-      notification.style.animation = 'slideOutRight 0.3s ease-in';
-      setTimeout(() => notification.remove(), 300);
-    }
-  }, 5000);
-}
-
-// Loading States and Animations
-function showLoadingState(element, type = 'button') {
-  if (type === 'button') {
-    element.classList.add('btn-loading');
-    element.disabled = true;
-  } else if (type === 'form') {
-    element.classList.add('form-loading');
-  } else if (type === 'page') {
-    element.classList.add('loading');
+    showToast('Voice recognition not supported in this browser', 'error');
   }
 }
 
-function hideLoadingState(element, type = 'button') {
-  if (type === 'button') {
-    element.classList.remove('btn-loading');
-    element.disabled = false;
-  } else if (type === 'form') {
-    element.classList.remove('form-loading');
-  } else if (type === 'page') {
-    element.classList.remove('loading');
-  }
-}
-
-// Enhanced form submission with loading states
-function handleFormSubmission(form, callback) {
-  const submitButton = form.querySelector('button[type="submit"]');
+function toggleVoiceCommand() {
+  const modal = document.getElementById('voice-modal');
   
-  if (submitButton) {
-    showLoadingState(submitButton, 'button');
-    showLoadingState(form, 'form');
+  if (modal.style.display === 'none') {
+    modal.style.display = 'flex';
+    document.getElementById('voice-transcript').textContent = '';
+    document.getElementById('voice-status').textContent = 'Click microphone to start...';
+    document.getElementById('voice-animation').style.display = 'none';
     
-    // Simulate processing time
+    if (!recognition) initVoiceRecognition();
+    
     setTimeout(() => {
-      if (callback) callback();
-      hideLoadingState(submitButton, 'button');
-      hideLoadingState(form, 'form');
-    }, 2000);
+      if (recognition) {
+        recognition.start();
+      }
+    }, 500);
+  } else {
+    modal.style.display = 'none';
+    if (recognition && isListening) {
+      recognition.stop();
+    }
   }
 }
 
-// Enhanced Form Validation and User Feedback
-function validateForm(form) {
-  const inputs = form.querySelectorAll('input[required], select[required], textarea[required]');
-  let isValid = true;
-  const errors = [];
+function stopListening() {
+  isListening = false;
+  document.querySelector('.voice-btn').classList.remove('listening');
+  document.getElementById('voice-status').textContent = 'Processing...';
+  document.getElementById('voice-animation').style.display = 'none';
+}
+
+function processVoiceCommand(command) {
+  // Parse: "add 500 rupees food expense"
+  // Parse: "add 1000 salary income"
+  // Parse: "show balance"
+  // Parse: "show charts"
   
-  inputs.forEach(input => {
-    const value = input.value.trim();
-    const fieldName = input.name || input.id || 'field';
-    
-    // Clear previous errors
-    clearFieldError(input);
-    
-    // Required field validation
-    if (!value) {
-      showFieldError(input, `${fieldName} is required`);
-      errors.push(`${fieldName} is required`);
-      isValid = false;
-      return;
+  if (command.includes('show balance')) {
+    document.getElementById('voice-modal').style.display = 'none';
+    document.getElementById('tracker').scrollIntoView({ behavior: 'smooth' });
+    showToast('Showing balance', 'info');
+    return;
+  }
+  
+  if (command.includes('show chart')) {
+    document.getElementById('voice-modal').style.display = 'none';
+    showCharts();
+    showToast('Opening charts', 'info');
+    return;
+  }
+  
+  if (command.includes('show insight')) {
+    document.getElementById('voice-modal').style.display = 'none';
+    showAIInsights();
+    showToast('Opening AI insights', 'info');
+    return;
+  }
+  
+  // Extract amount
+  const amountMatch = command.match(/(\d+)/);
+  if (!amountMatch) {
+    showToast('Could not understand amount. Try: "add 500 food expense"', 'error');
+    setTimeout(() => document.getElementById('voice-modal').style.display = 'none', 2000);
+    return;
+  }
+  
+  const amount = parseFloat(amountMatch[1]);
+  
+  // Determine type
+  const isIncome = command.includes('income') || command.includes('salary') || command.includes('earning');
+  const type = isIncome ? 'income' : 'expense';
+  
+  // Determine category
+  let category = 'Other';
+  const categories = ['food', 'shopping', 'transport', 'bills', 'entertainment', 'health', 'education', 'salary'];
+  for (const cat of categories) {
+    if (command.includes(cat)) {
+      category = cat.charAt(0).toUpperCase() + cat.slice(1);
+      break;
     }
-    
-    // Email validation
-    if (input.type === 'email' && value) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(value)) {
-        showFieldError(input, 'Please enter a valid email address');
-        errors.push('Invalid email format');
-        isValid = false;
-      }
-    }
-    
-    // Password validation
-    if (input.type === 'password' && value) {
-      if (value.length < 8) {
-        showFieldError(input, 'Password must be at least 8 characters long');
-        errors.push('Password too short');
-        isValid = false;
-      }
-    }
-    
-    // Phone validation
-    if (input.type === 'tel' && value) {
-      const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-      if (!phoneRegex.test(value.replace(/[\s\-\(\)]/g, ''))) {
-        showFieldError(input, 'Please enter a valid phone number');
-        errors.push('Invalid phone number');
-        isValid = false;
-      }
-    }
+  }
+  
+  // Add transaction
+  const description = `Voice: ${category} ${type}`;
+  const date = new Date().toISOString().split('T')[0];
+  
+  transactions.push({
+    id: Date.now(),
+    description,
+    amount,
+    category,
+    type,
+    date
   });
   
-  return { isValid, errors };
-}
-
-function showFieldError(input, message) {
-  const errorDiv = document.createElement('div');
-  errorDiv.className = 'field-error';
-  errorDiv.textContent = message;
-  errorDiv.style.cssText = `
-    color: #dc3545;
-    font-size: 12px;
-    margin-top: 4px;
-    animation: fadeInUp 0.3s ease-out;
-  `;
+  saveTransactions();
+  updateBalance();
+  updateTable();
   
-  input.classList.add('error');
-  input.style.borderColor = '#dc3545';
+  document.getElementById('voice-modal').style.display = 'none';
+  showToast(`Added ${type}: ₹${amount} for ${category}`, 'success');
   
-  // Insert error after input
-  input.parentNode.insertBefore(errorDiv, input.nextSibling);
-}
-
-function clearFieldError(input) {
-  input.classList.remove('error');
-  input.style.borderColor = '';
-  
-  const existingError = input.parentNode.querySelector('.field-error');
-  if (existingError) {
-    existingError.remove();
+  if (type === 'income') {
+    createConfetti();
   }
 }
 
-function showSuccessMessage(message) {
-  const notification = document.createElement('div');
-  notification.style.cssText = `
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-    color: white;
-    padding: 15px 20px;
-    border-radius: 12px;
-    font-size: 14px;
-    z-index: 1000;
-    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.1);
-    animation: slideInRight 0.3s ease-out;
-  `;
-  
-  notification.innerHTML = `
-    <div style="display: flex; align-items: center; gap: 10px;">
-      <i class="fas fa-check-circle" style="color: #ffffff; font-size: 16px;"></i>
-      <strong>${message}</strong>
-    </div>
-  `;
-  
-  document.body.appendChild(notification);
-  
-  setTimeout(() => {
-    notification.style.animation = 'slideOutRight 0.3s ease-in';
-    setTimeout(() => notification.remove(), 300);
-  }, 4000);
-}
-
-function showErrorMessage(message) {
-  const notification = document.createElement('div');
-  notification.style.cssText = `
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-    color: white;
-    padding: 15px 20px;
-    border-radius: 12px;
-    font-size: 14px;
-    z-index: 1000;
-    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.1);
-    animation: slideInRight 0.3s ease-out;
-  `;
-  
-  notification.innerHTML = `
-    <div style="display: flex; align-items: center; gap: 10px;">
-      <i class="fas fa-exclamation-circle" style="color: #ffc107; font-size: 16px;"></i>
-      <strong>${message}</strong>
-    </div>
-  `;
-  
-  document.body.appendChild(notification);
-  
-  setTimeout(() => {
-    notification.style.animation = 'slideOutRight 0.3s ease-in';
-    setTimeout(() => notification.remove(), 300);
-  }, 5000);
-}
-
-// Keyboard Navigation Support
-function initKeyboardNavigation() {
-  // Tab navigation enhancement
-  document.addEventListener('keydown', function(e) {
-    // Skip to main content with Tab
-    if (e.key === 'Tab' && !e.shiftKey && document.activeElement === document.body) {
-      const mainContent = document.querySelector('main, .main-content, .section-box');
-      if (mainContent) {
-        mainContent.focus();
-        e.preventDefault();
-      }
-    }
-    
-    // Escape key to close modals/menus
-    if (e.key === 'Escape') {
-      // Close mobile menu
-      const navLinks = document.querySelector('.nav-links');
-      const menuToggle = document.getElementById('menu-toggle');
-      if (navLinks && navLinks.classList.contains('active')) {
-        navLinks.classList.remove('active');
-        const icon = menuToggle.querySelector('i');
-        icon.classList.remove('fa-times');
-        icon.classList.add('fa-bars');
-      }
-      
-      // Clear search
-      const searchInput = document.getElementById('search-input');
-      if (searchInput && document.activeElement === searchInput) {
-        searchInput.value = '';
-        clearSearchHighlights();
-        hideSearchResults();
-      }
-    }
-    
-    // Arrow key navigation for lists
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      const activeElement = document.activeElement;
-      const listItems = Array.from(document.querySelectorAll('li, .nav-links a, .benefit-item'));
-      const currentIndex = listItems.indexOf(activeElement);
-      
-      if (currentIndex !== -1) {
-        e.preventDefault();
-        const nextIndex = e.key === 'ArrowDown' 
-          ? (currentIndex + 1) % listItems.length
-          : (currentIndex - 1 + listItems.length) % listItems.length;
-        
-        listItems[nextIndex].focus();
-      }
-    }
-    
-    // Enter key to activate focused elements
-    if (e.key === 'Enter') {
-      const activeElement = document.activeElement;
-      if (activeElement.tagName === 'A' || activeElement.tagName === 'BUTTON') {
-        activeElement.click();
-      }
-    }
-  });
-  
-  // Focus management for better accessibility
-  const focusableElements = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
-  
-  // Trap focus in modals
-  function trapFocus(element) {
-    const focusableContent = element.querySelectorAll(focusableElements);
-    const firstFocusableElement = focusableContent[0];
-    const lastFocusableElement = focusableContent[focusableContent.length - 1];
-    
-    element.addEventListener('keydown', function(e) {
-      if (e.key === 'Tab') {
-        if (e.shiftKey) {
-          if (document.activeElement === firstFocusableElement) {
-            lastFocusableElement.focus();
-            e.preventDefault();
-          }
-        } else {
-          if (document.activeElement === lastFocusableElement) {
-            firstFocusableElement.focus();
-            e.preventDefault();
-          }
-        }
-      }
-    });
-  }
-  
-  // Apply focus trap to mobile menu
-  const navLinks = document.querySelector('.nav-links');
-  if (navLinks) {
-    trapFocus(navLinks);
-  }
-}
-
-// Enhanced keyboard shortcuts
-function initKeyboardShortcuts() {
-  document.addEventListener('keydown', function(e) {
-    // Alt + H for Home
-    if (e.altKey && e.key === 'h') {
-      e.preventDefault();
-      const homeLink = document.querySelector('a[href="#"], a[href="./index.html"]');
-      if (homeLink) homeLink.click();
-    }
-    
-    // Alt + S for Support
-    if (e.altKey && e.key === 's') {
-      e.preventDefault();
-      const supportLink = document.querySelector('a[href="./support.html"]');
-      if (supportLink) supportLink.click();
-    }
-    
-    // Alt + L for Login
-    if (e.altKey && e.key === 'l') {
-      e.preventDefault();
-      const loginLink = document.querySelector('a[href="./login.html"]');
-      if (loginLink) loginLink.click();
-    }
-    
-    // Alt + U for Sign Up
-    if (e.altKey && e.key === 'u') {
-      e.preventDefault();
-      const signupLink = document.querySelector('a[href="./sign-up.html"]');
-      if (signupLink) signupLink.click();
-    }
-  });
-}
-
-// Page transition effects
-function addPageTransition() {
-  document.body.classList.add('page-enter');
-  
-  // Remove class after animation
-  setTimeout(() => {
-    document.body.classList.remove('page-enter');
-  }, 500);
-}
-
-// Scroll to first search result
-function scrollToFirstResult() {
-  const firstResult = document.querySelector('.search-highlight');
-  if (firstResult) {
-    firstResult.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
-}
-
-// Show search notification
-function showSearchNotification(message, type = 'info') {
-  // Create notification element
-  const notification = document.createElement('div');
-  notification.className = `search-notification search-notification-${type}`;
-  notification.textContent = message;
-  
-  // Style the notification
-  notification.style.cssText = `
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    background: ${type === 'success' ? '#28a745' : '#17a2b8'};
-    color: white;
-    padding: 12px 20px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    z-index: 10000;
-    font-weight: 500;
-    animation: slideInSearch 0.3s ease-out;
-    max-width: 300px;
-  `;
-  
-  // Add animation keyframes for search notifications
-  if (!document.getElementById('search-notification-styles')) {
-    const style = document.createElement('style');
-    style.id = 'search-notification-styles';
-    style.textContent = `
-      @keyframes slideInSearch {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-      }
-      @keyframes slideOutSearch {
-        from { transform: translateX(0); opacity: 1; }
-        to { transform: translateX(100%); opacity: 0; }
-      }
-      .search-highlight {
-        background-color: #f4ff61 !important;
-        color: #0b0081 !important;
-        padding: 2px 4px;
-        border-radius: 3px;
-      }
-    `;
-    document.head.appendChild(style);
-  }
-  
-  // Add to page
-  document.body.appendChild(notification);
-  
-  // Remove after 3 seconds
-  setTimeout(() => {
-    notification.style.animation = 'slideOutSearch 0.3s ease-in';
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
-    }, 300);
-  }, 3000);
-}
+// Initialize on load
+document.addEventListener('DOMContentLoaded', () => {
+  initVoiceRecognition();
+});
